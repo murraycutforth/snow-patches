@@ -1,0 +1,18 @@
+# Core Geospatial Libraries
+geopandas>=0.14.0
+shapely>=2.0.0
+
+# Satellite Data Access (Copernicus Data Space Ecosystem)
+sentinelhub>=3.10.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Testing Framework
+pytest>=7.4.0
+pytest-mock>=3.12.0
+
+# Additional dependencies required by geopandas
+# (These are typically installed automatically, but listed for clarity)
+pyproj>=3.5.0

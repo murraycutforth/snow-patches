@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest:*)",
+      "Bash(tree:*)",
+      "Bash(COPERNICUS_USERNAME=\"murray.cutforth@gmail.com\" COPERNICUS_PASSWORD='f!\"nr,;]J7ZZ!@' pytest:*)"
+    ]
+  }
+}
