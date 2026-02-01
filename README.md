@@ -62,6 +62,31 @@ PYTHONPATH=. python examples/download_workflow.py
 PYTHONPATH=. python examples/snow_mask_workflow.py
 ```
 
+## Interactive Notebook
+
+**For the best demonstration experience**, see the Jupyter notebook:
+
+```bash
+cd notebooks
+jupyter notebook snow_coverage_analysis_demo.ipynb
+```
+
+**Features:**
+- 📊 Complete end-to-end workflow demonstration
+- 🎨 Rich visualizations with matplotlib
+- 🗺️ Side-by-side comparisons of bands, NDSI, and snow masks
+- 📈 Time series analysis and statistical summaries
+- 🔄 Works with or without API credentials (synthetic data mode)
+
+The notebook includes comprehensive visualizations showing:
+- Individual band analysis (B03 Green, B11 SWIR)
+- Continuous NDSI maps with threshold visualization
+- Binary snow masks with statistics
+- Time series plots tracking snow coverage trends
+- Comparative analysis between mountain regions
+
+See `notebooks/README.md` for detailed usage instructions.
+
 ## Project Structure
 
 ```
@@ -94,6 +119,9 @@ snow-patches/
 │   ├── database_workflow.py  # Complete workflow demo
 │   ├── download_workflow.py  # Download workflow demo
 │   └── snow_mask_workflow.py # Snow mask generation workflow
+├── notebooks/                # Jupyter notebooks
+│   ├── snow_coverage_analysis_demo.ipynb  # Interactive demonstration
+│   └── README.md            # Notebook usage guide
 ├── alembic/                  # Database migration scripts
 │   ├── versions/
 │   └── env.py
