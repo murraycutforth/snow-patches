@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+alembic/versions/__pycache__/
 .Python
 build/
 develop-eggs/

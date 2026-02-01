@@ -8,6 +8,11 @@ sentinelhub>=3.10.0
 # Data Processing
 pandas>=2.0.0
 numpy>=1.24.0
+rasterio>=1.3.0
+
+# Database & ORM
+sqlalchemy>=2.0.0
+alembic>=1.13.0
 
 # Testing Framework
 pytest>=7.4.0

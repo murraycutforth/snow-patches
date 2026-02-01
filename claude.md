@@ -59,6 +59,19 @@ Queries Copernicus Data Space for Sentinel-2 imagery:
   - `create_sh_config(client_id, client_secret) -> SHConfig`
   - `find_sentinel_products(config, bbox, start_date, end_date, max_cloud_cover) -> DataFrame`
 
+### `data_handler/snow_mask.py`
+Generates binary snow masks from Sentinel-2 imagery using NDSI:
+- Calculates NDSI = (B03 - B11) / (B03 + B11 + epsilon)
+- Applies configurable threshold (default: 0.4)
+- Saves masks as single-band GeoTIFF files
+- Tracks statistics in database (snow_pixels, total_pixels, snow_pct)
+- **Key functions**:
+  - `calculate_ndsi(band_green, band_swir, epsilon) -> ndarray` - Pure NumPy NDSI calculation
+  - `apply_threshold(ndsi, threshold) -> ndarray` - Binary classification
+  - `calculate_snow_statistics(snow_mask) -> Dict` - Compute coverage statistics
+  - `process_product_snow_mask(session, product_db_id, ndsi_threshold, save_mask) -> Tuple` - Process single product
+  - `process_downloaded_products(session, ndsi_threshold, save_masks, limit) -> Dict` - Batch processing
+
 ## Development Workflow
 
 ### TDD Approach
@@ -141,13 +154,21 @@ The project recently migrated from `sentinelsat` (deprecated) to `sentinelhub` (
 - API endpoint: SciHub → Copernicus Data Space Ecosystem
 - See MIGRATION.md for full details
 
-### DataFrame Schema
-Sentinel-2 product results include:
+### Data Schemas
+
+**Sentinel-2 Product DataFrame:**
 - `id`: Unique product identifier
 - `product_id`: Full product name
 - `date`: Acquisition timestamp
 - `cloud_cover`: Cloud coverage percentage (0-100)
 - `geometry`: GeoJSON geometry
+
+**Snow Mask Results:**
+- `snow_pixels`: Number of pixels classified as snow (int)
+- `total_pixels`: Total number of pixels in image (int)
+- `snow_pct`: Snow coverage percentage (float)
+- `mask_path`: Optional path to saved GeoTIFF file
+- `ndsi_threshold`: Threshold value used for classification
 
 ### Coordinate Reference
 - **Ben Nevis**: 56.7969°N, 5.0036°W
@@ -160,9 +181,9 @@ The project follows a phased approach:
 
 - [x] **Phase 1**: AOI Definition
 - [x] **Phase 2**: Data Discovery
-- [ ] **Phase 3**: Database Schema Design
-- [ ] **Phase 4**: Data Download & Processing
-- [ ] **Phase 5**: Snow Mask Generation (NDSI calculation)
+- [x] **Phase 3**: Database Schema Design
+- [x] **Phase 4**: Data Download & Processing
+- [x] **Phase 5**: Snow Mask Generation (NDSI calculation)
 - [ ] **Phase 6**: Workflow Automation
 
 ## Tips for AI Assistance

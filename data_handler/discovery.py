@@ -20,10 +20,12 @@ Authentication:
 """
 
 import os
+import json
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 import pandas as pd
+import geopandas as gpd
 from sentinelhub import (
     SHConfig,
     DataCollection,
@@ -33,6 +35,7 @@ from sentinelhub import (
     filter_times,
 )
 from shapely.geometry.base import BaseGeometry
+from sqlalchemy.orm import Session
 
 
 def create_sh_config(
@@ -249,3 +252,149 @@ def summarize_products(products_df: pd.DataFrame) -> dict:
         'min_cloud_cover': products_df['cloud_cover'].min(),
         'max_cloud_cover': products_df['cloud_cover'].max()
     }
+
+
+def seed_aois_from_geodataframe(
+    session: Session,
+    aois_gdf: gpd.GeoDataFrame,
+    size_km: float = 10.0
+) -> Tuple[int, int]:
+    """Seed AOIs from a GeoDataFrame into the database.
+
+    This function populates the AOI table from a GeoDataFrame (typically
+    from aoi.get_aois()). It extracts center coordinates from geometry
+    centroids and converts geometries to WKT format for storage.
+
+    Args:
+        session: SQLAlchemy session instance
+        aois_gdf: GeoDataFrame with 'name' and 'geometry' columns
+        size_km: Size of each AOI in kilometers (default 10.0)
+
+    Returns:
+        Tuple of (created_count, skipped_count)
+
+    Example:
+        >>> from data_handler.aoi import get_aois
+        >>> from data_handler.database import create_db_engine, init_database, get_session_factory
+        >>>
+        >>> engine = create_db_engine(db_path='data/snow_patches.db')
+        >>> init_database(engine)
+        >>> session = get_session_factory(engine)()
+        >>>
+        >>> aois_gdf = get_aois()
+        >>> created, skipped = seed_aois_from_geodataframe(session, aois_gdf)
+        >>> print(f"Created {created} AOIs, skipped {skipped}")
+        >>> session.close()
+    """
+    from data_handler.repositories import AOIRepository
+
+    aoi_repo = AOIRepository(session)
+
+    created_count = 0
+    skipped_count = 0
+
+    for _, row in aois_gdf.iterrows():
+        name = row['name']
+
+        # Skip if AOI already exists
+        if aoi_repo.exists(name):
+            skipped_count += 1
+            continue
+
+        # Extract center coordinates from centroid
+        centroid = row['geometry'].centroid
+        center_lat = centroid.y
+        center_lon = centroid.x
+
+        # Convert geometry to WKT string
+        geometry_wkt = row['geometry'].wkt
+
+        # Create AOI
+        aoi_repo.create(
+            name=name,
+            center_lat=center_lat,
+            center_lon=center_lon,
+            geometry=geometry_wkt,
+            size_km=size_km
+        )
+        created_count += 1
+
+    return created_count, skipped_count
+
+
+def save_products_to_db(
+    session: Session,
+    products_df: pd.DataFrame,
+    aoi_name: str
+) -> Tuple[int, int]:
+    """Save discovered products to the database.
+
+    This function takes a DataFrame of products (from find_sentinel_products())
+    and saves them to the database, linked to the specified AOI.
+
+    Args:
+        session: SQLAlchemy session instance
+        products_df: DataFrame with columns: id, product_id, date, cloud_cover, geometry
+        aoi_name: Name of the AOI these products belong to
+
+    Returns:
+        Tuple of (created_count, skipped_count)
+
+    Raises:
+        ValueError: If the specified AOI is not found in the database
+
+    Example:
+        >>> from data_handler.discovery import find_sentinel_products, save_products_to_db
+        >>> from data_handler.database import create_db_engine, init_database, get_session_factory
+        >>> from datetime import datetime
+        >>>
+        >>> # Setup database and session
+        >>> engine = create_db_engine(db_path='data/snow_patches.db')
+        >>> session = get_session_factory(engine)()
+        >>>
+        >>> # Discover products
+        >>> config = create_sh_config()
+        >>> aoi = ... # Get AOI geometry
+        >>> products_df = find_sentinel_products(
+        ...     config, aoi, datetime(2024, 1, 1), datetime(2024, 1, 31)
+        ... )
+        >>>
+        >>> # Save to database
+        >>> created, skipped = save_products_to_db(session, products_df, 'Ben Nevis')
+        >>> print(f"Saved {created} products, skipped {skipped} duplicates")
+        >>> session.close()
+    """
+    from data_handler.repositories import AOIRepository, SentinelProductRepository
+
+    aoi_repo = AOIRepository(session)
+    product_repo = SentinelProductRepository(session)
+
+    # Get the AOI
+    aoi = aoi_repo.get_by_name(aoi_name)
+    if aoi is None:
+        raise ValueError(f"AOI '{aoi_name}' not found in database. Please seed AOIs first.")
+
+    # Convert DataFrame to list of dictionaries for bulk creation
+    products_data = []
+    for _, row in products_df.iterrows():
+        # Convert pandas Timestamp to Python datetime
+        acquisition_dt = row['date'].to_pydatetime() if hasattr(row['date'], 'to_pydatetime') else row['date']
+
+        # Convert geometry dict to JSON string
+        if isinstance(row['geometry'], dict):
+            geometry_str = json.dumps(row['geometry'])
+        else:
+            geometry_str = str(row['geometry'])
+
+        products_data.append({
+            'product_id': row['product_id'],
+            'aoi_id': aoi.id,
+            'acquisition_dt': acquisition_dt,
+            'cloud_cover': row['cloud_cover'],
+            'geometry': geometry_str
+        })
+
+    # Use bulk creation with deduplication
+    created_count, skipped_count = product_repo.bulk_create_if_not_exists(products_data)
+
+    return created_count, skipped_count
