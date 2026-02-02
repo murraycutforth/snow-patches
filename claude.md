@@ -92,7 +92,7 @@ export SH_CLIENT_ID="your_client_id"
 export SH_CLIENT_SECRET="your_client_secret"
 ```
 
-Get credentials from: https://shapps.dataspace.copernicus.eu/dashboard/#/account/settings
+Get credentials from: https://shapps.dataspace.copernicus.eu/dashboard/#/account/settings - cached in credentials.txt
 
 ## Code Conventions
 

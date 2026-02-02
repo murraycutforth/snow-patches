@@ -334,16 +334,33 @@ def download_product(
             base_dir=output_dir
         )
 
-        # Create bounding box from product geometry
-        # For simplicity, use AOI bounds (in real scenario, parse product.geometry)
-        # Assuming AOI geometry is in WKT format "POLYGON((lon lat, ...))"
-        # Use a smaller bbox (±0.05 degrees = ~5km) to avoid exceeding resolution limits
+        # Create bounding box from AOI geometry
+        # Parse the WKT geometry to get the actual bounds
         aoi = product.aoi
-        bbox = BBox(
-            bbox=[aoi.center_lon - 0.05, aoi.center_lat - 0.05,
-                  aoi.center_lon + 0.05, aoi.center_lat + 0.05],
-            crs=CRS.WGS84
-        )
+
+        # Use shapely to parse WKT and get bounds
+        from shapely import wkt
+        try:
+            geometry = wkt.loads(aoi.geometry)
+            bounds = geometry.bounds  # (minx, miny, maxx, maxy)
+            bbox = BBox(bbox=bounds, crs=CRS.WGS84)
+        except Exception:
+            # Fallback: Create square box with latitude-corrected longitude offset
+            # For a 10km box at this latitude
+            import math
+            half_size_km = 5.0  # 10km / 2
+            km_per_degree_lat = 111.32
+            lat_offset = half_size_km / km_per_degree_lat
+
+            lat_radians = math.radians(aoi.center_lat)
+            km_per_degree_lon = km_per_degree_lat * math.cos(lat_radians)
+            lon_offset = half_size_km / km_per_degree_lon
+
+            bbox = BBox(
+                bbox=[aoi.center_lon - lon_offset, aoi.center_lat - lat_offset,
+                      aoi.center_lon + lon_offset, aoi.center_lat + lat_offset],
+                crs=CRS.WGS84
+            )
 
         # Create time interval (single day for specific product)
         acquisition_date = product.acquisition_dt
