@@ -15,8 +15,18 @@ This project uses a comprehensive testing strategy with both unit tests and inte
 - **Requirements**:
   - Valid Copernicus credentials (for API tests)
   - File system access (for database tests)
+  - Jupyter kernel installed (for notebook tests)
 - **Speed**: Slower (API calls and file I/O take time)
 - **Purpose**: Verify correct interaction with real external services and file-based databases
+- **Marker**: `@pytest.mark.integration`
+
+### Notebook Integration Tests
+- **Location**: `tests/integration/test_notebook_execution.py`
+- **Requirements**:
+  - Jupyter and nbconvert installed
+  - `snow-patches` Jupyter kernel registered
+- **Speed**: Slow (~20-30 seconds per notebook)
+- **Purpose**: Verify Jupyter notebooks execute end-to-end without errors
 - **Marker**: `@pytest.mark.integration`
 
 ## Running Tests
@@ -55,6 +65,9 @@ pytest tests/test_discovery_db_integration.py -v
 
 # Integration tests only
 pytest tests/integration/ -v -m integration
+
+# Notebook integration tests only
+pytest tests/integration/test_notebook_execution.py -v -m integration
 ```
 
 ### Run with Coverage Report
@@ -150,9 +163,14 @@ For CI/CD pipelines (e.g., GitHub Actions), you can:
 
 | Marker | Description | Usage |
 |--------|-------------|-------|
-| `integration` | Tests that call external APIs | `pytest -m integration` |
-| `unit` | Fast isolated tests | `pytest -m unit` |
-| `slow` | Tests that take >1 second | `pytest -m "not slow"` |
+| `integration` | Tests that call external APIs or use file systems | `pytest -m integration` |
+| `unit` | Fast isolated tests with mocked dependencies | `pytest -m unit` |
+| `slow` | Tests that take >30 seconds (notebooks, real downloads) | `pytest -m "not slow"` |
+
+**Note**: The `slow` marker is used for tests that are particularly time-consuming:
+- Notebook execution with real data: 10-20 minutes
+- Full pipeline integration tests: 5-10 minutes
+- Use `pytest -m "not slow"` to skip these during rapid development
 
 ## Troubleshooting
 
@@ -215,6 +233,98 @@ pytest tests/integration/test_database_integration.py -v -m integration
 # Discovery + Database integration
 pytest tests/test_discovery_db_integration.py -v
 ```
+
+## Notebook Testing
+
+The project includes automated testing for Jupyter notebooks to ensure they execute correctly.
+
+### Notebook Test Setup
+
+1. **Install Jupyter kernel**:
+   ```bash
+   # Activate your conda environment
+   conda activate snow-patches
+
+   # Install ipykernel
+   pip install ipykernel
+
+   # Register kernel
+   python -m ipykernel install --user --name snow-patches --display-name "Python (snow-patches)"
+   ```
+
+2. **Verify kernel installation**:
+   ```bash
+   jupyter kernelspec list
+   # Should show 'snow-patches' in the list
+   ```
+
+### Running Notebook Tests
+
+```bash
+# Run all notebook tests
+pytest tests/integration/test_notebook_execution.py -v -m integration
+
+# Run specific test
+pytest tests/integration/test_notebook_execution.py::test_snow_coverage_analysis_demo_executes -v
+
+# Run with output visible
+pytest tests/integration/test_notebook_execution.py -v -s
+```
+
+### What the Tests Verify
+
+1. **Execution Test** (`test_snow_coverage_analysis_demo_executes`):
+   - Notebook executes without Python errors
+   - All code cells complete successfully
+   - No exceptions are raised
+
+2. **Output Validation Test** (`test_notebook_produces_expected_outputs`):
+   - Database is initialized
+   - AOIs are defined
+   - Products are discovered (synthetic or real)
+   - Snow masks are generated
+   - Visualizations are created
+
+3. **Real Data Test** (`test_notebook_with_real_credentials`):
+   - Only runs if `SH_CLIENT_ID` and `SH_CLIENT_SECRET` are set
+   - Verifies notebook works with real Sentinel Hub API
+   - Downloads and processes actual satellite imagery
+   - Marked as `@pytest.mark.slow` (takes 10-20 minutes)
+
+### Test Output
+
+When tests pass, you'll see:
+```
+================================================================================
+NOTEBOOK EXECUTION SUMMARY
+================================================================================
+Total code cells: 20
+Cells with errors: 0
+Cells with success indicators: 10
+
+✅ Notebook executed successfully!
+================================================================================
+
+PASSED
+```
+
+### Troubleshooting Notebook Tests
+
+**Error: "No such kernel named python3"**
+- Solution: Install and register the Jupyter kernel (see setup above)
+
+**Error: "jupyter: command not found"**
+- Solution: Install Jupyter: `pip install jupyter nbconvert`
+
+**Timeout errors**
+- Default timeout is 600 seconds (10 minutes)
+- Increase for slow systems or real data downloads
+- Edit `ExecutePreprocessor.timeout` in test file
+
+**Notebooks fail but work in Jupyter**
+- Check kernel name matches: `snow-patches`
+- Verify all dependencies are installed in the conda environment
+- Check for cells that depend on interactive input
 
 ## Alembic Migrations
 

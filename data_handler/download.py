@@ -437,7 +437,8 @@ def download_product(
 def download_pending_products(
     session: Session,
     limit: Optional[int] = None,
-    config: Optional[SHConfig] = None
+    config: Optional[SHConfig] = None,
+    max_retries: Optional[int] = None
 ) -> Dict[str, int]:
     """
     Download all pending products from database.
@@ -449,6 +450,10 @@ def download_pending_products(
         session: SQLAlchemy database session
         limit: Maximum number of products to download (None = no limit)
         config: SentinelHub configuration (uses default if None)
+        max_retries: Maximum number of retry attempts for failed downloads.
+                     Currently accepted but not implemented - placeholder for
+                     future retry logic. Products with retry_count >= max_retries
+                     will be skipped in future implementation.
 
     Returns:
         Dictionary with download statistics:
@@ -461,6 +466,8 @@ def download_pending_products(
     Example:
         >>> results = download_pending_products(session, limit=10)
         >>> print(f"Downloaded: {results['success']}, Failed: {results['failed']}")
+        >>> # With retry limit:
+        >>> results = download_pending_products(session, limit=10, max_retries=3)
     """
     # Initialize statistics
     stats = {

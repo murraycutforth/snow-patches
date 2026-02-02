@@ -22,7 +22,7 @@ Authentication:
 import os
 import json
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Union
 
 import pandas as pd
 import geopandas as gpd
@@ -100,11 +100,12 @@ def create_sh_config(
 
 def find_sentinel_products(
     config: SHConfig,
-    aoi_geometry: BaseGeometry,
-    start_date: datetime,
-    end_date: datetime,
+    aoi_geometry: Optional[BaseGeometry] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
     max_cloud_cover: float = 20.0,
-    data_collection: DataCollection = DataCollection.SENTINEL2_L2A
+    data_collection: DataCollection = DataCollection.SENTINEL2_L2A,
+    bbox: Optional[BaseGeometry] = None
 ) -> pd.DataFrame:
     """Query the Copernicus Data Space for Sentinel-2 products matching criteria.
 
@@ -115,7 +116,7 @@ def find_sentinel_products(
     Args:
         config: A configured SHConfig instance with valid credentials
         aoi_geometry: A Shapely geometry (Polygon or MultiPolygon) defining the
-                      Area of Interest
+                      Area of Interest. Can also use 'bbox' parameter.
         start_date: Start of the date range to search (inclusive)
         end_date: End of the date range to search (inclusive)
         max_cloud_cover: Maximum acceptable cloud cover percentage (0-100).
@@ -125,6 +126,7 @@ def find_sentinel_products(
                          Options:
                          - DataCollection.SENTINEL2_L2A: Level-2A BOA reflectance
                          - DataCollection.SENTINEL2_L1C: Level-1C TOA reflectance
+        bbox: Alias for aoi_geometry. Use either bbox or aoi_geometry, not both.
 
     Returns:
         A pandas DataFrame containing the filtered products. Each row represents
@@ -137,11 +139,16 @@ def find_sentinel_products(
 
         Returns an empty DataFrame with the expected columns if no products are found.
 
+    Raises:
+        ValueError: If both bbox and aoi_geometry are provided, or if neither is provided,
+                    or if start_date or end_date is missing
+
     Example:
         >>> from shapely.geometry import Polygon
         >>> from datetime import datetime
         >>> aoi = Polygon([(-5.1, 56.7), (-5.0, 56.7), (-5.0, 56.8), (-5.1, 56.8)])
         >>> config = create_sh_config()
+        >>> # Can use either parameter name:
         >>> products = find_sentinel_products(
         ...     config=config,
         ...     aoi_geometry=aoi,
@@ -149,12 +156,32 @@ def find_sentinel_products(
         ...     end_date=datetime(2024, 1, 31),
         ...     max_cloud_cover=15.0
         ... )
+        >>> # Or use bbox:
+        >>> products = find_sentinel_products(
+        ...     config=config,
+        ...     bbox=aoi,
+        ...     start_date=datetime(2024, 1, 1),
+        ...     end_date=datetime(2024, 1, 31)
+        ... )
         >>> print(f"Found {len(products)} suitable scenes")
     """
+    # Handle bbox/aoi_geometry parameter aliases
+    if bbox is not None and aoi_geometry is not None:
+        raise ValueError("Provide either 'bbox' or 'aoi_geometry', not both")
+    if bbox is None and aoi_geometry is None:
+        raise ValueError("Must provide either 'bbox' or 'aoi_geometry'")
+
+    # Use whichever was provided
+    geometry = bbox if bbox is not None else aoi_geometry
+
+    # Validate required parameters
+    if start_date is None or end_date is None:
+        raise ValueError("start_date and end_date are required")
+
     # Convert shapely geometry to BBox
     # Get bounds in WGS84 (EPSG:4326)
-    bounds = aoi_geometry.bounds  # (minx, miny, maxx, maxy)
-    bbox = BBox(bbox=bounds, crs=CRS.WGS84)
+    bounds = geometry.bounds  # (minx, miny, maxx, maxy)
+    bbox_obj = BBox(bbox=bounds, crs=CRS.WGS84)
 
     # Create catalog instance
     catalog = SentinelHubCatalog(config=config)
@@ -165,7 +192,7 @@ def find_sentinel_products(
     # Search for products
     search_iterator = catalog.search(
         collection=data_collection,
-        bbox=bbox,
+        bbox=bbox_obj,
         time=time_interval,
         fields={
             "include": ["id", "properties.datetime", "properties.eo:cloud_cover"],
@@ -325,7 +352,9 @@ def seed_aois_from_geodataframe(
 def save_products_to_db(
     session: Session,
     products_df: pd.DataFrame,
-    aoi_name: str
+    aoi: Optional[Union[str, int]] = None,
+    aoi_name: Optional[str] = None,
+    aoi_id: Optional[int] = None
 ) -> Tuple[int, int]:
     """Save discovered products to the database.
 
@@ -335,7 +364,10 @@ def save_products_to_db(
     Args:
         session: SQLAlchemy session instance
         products_df: DataFrame with columns: id, product_id, date, cloud_cover, geometry
-        aoi_name: Name of the AOI these products belong to
+        aoi: AOI identifier - can be either a string (AOI name) or integer (AOI database ID).
+             This parameter accepts both types for backward compatibility and convenience.
+        aoi_name: (Deprecated) Use 'aoi' parameter instead. Name of the AOI (string).
+        aoi_id: (Deprecated) Use 'aoi' parameter instead. Database ID of the AOI (integer).
 
     Returns:
         Tuple of (created_count, skipped_count)
@@ -354,13 +386,18 @@ def save_products_to_db(
         >>>
         >>> # Discover products
         >>> config = create_sh_config()
-        >>> aoi = ... # Get AOI geometry
+        >>> aoi_geom = ... # Get AOI geometry
         >>> products_df = find_sentinel_products(
-        ...     config, aoi, datetime(2024, 1, 1), datetime(2024, 1, 31)
+        ...     config, aoi_geom, datetime(2024, 1, 1), datetime(2024, 1, 31)
         ... )
         >>>
-        >>> # Save to database
+        >>> # Save to database using AOI name (string)
         >>> created, skipped = save_products_to_db(session, products_df, 'Ben Nevis')
+        >>> # Or using AOI ID (integer)
+        >>> created, skipped = save_products_to_db(session, products_df, 1)
+        >>> # Keyword arguments also work:
+        >>> created, skipped = save_products_to_db(session, products_df, aoi='Ben Nevis')
+        >>> created, skipped = save_products_to_db(session, products_df, aoi=1)
         >>> print(f"Saved {created} products, skipped {skipped} duplicates")
         >>> session.close()
     """
@@ -369,10 +406,30 @@ def save_products_to_db(
     aoi_repo = AOIRepository(session)
     product_repo = SentinelProductRepository(session)
 
-    # Get the AOI
-    aoi = aoi_repo.get_by_name(aoi_name)
-    if aoi is None:
-        raise ValueError(f"AOI '{aoi_name}' not found in database. Please seed AOIs first.")
+    # Handle backward compatibility with aoi_name and aoi_id parameters
+    # Priority: aoi parameter > aoi_name parameter > aoi_id parameter
+    aoi_identifier = None
+    if aoi is not None:
+        # Use the main 'aoi' parameter
+        aoi_identifier = aoi
+    elif aoi_name is not None:
+        aoi_identifier = aoi_name
+    elif aoi_id is not None:
+        aoi_identifier = aoi_id
+    else:
+        raise ValueError("Must provide either 'aoi', 'aoi_name', or 'aoi_id' parameter")
+
+    # Get the AOI by name (string) or ID (integer)
+    if isinstance(aoi_identifier, str):
+        aoi_record = aoi_repo.get_by_name(aoi_identifier)
+        if aoi_record is None:
+            raise ValueError(f"AOI '{aoi_identifier}' not found in database. Please seed AOIs first.")
+    elif isinstance(aoi_identifier, int):
+        aoi_record = aoi_repo.get_by_id(aoi_identifier)
+        if aoi_record is None:
+            raise ValueError(f"AOI with ID {aoi_identifier} not found in database. Please seed AOIs first.")
+    else:
+        raise TypeError(f"AOI identifier must be a string (name) or integer (ID), got {type(aoi_identifier)}")
 
     # Convert DataFrame to list of dictionaries for bulk creation
     products_data = []
@@ -388,7 +445,7 @@ def save_products_to_db(
 
         products_data.append({
             'product_id': row['product_id'],
-            'aoi_id': aoi.id,
+            'aoi_id': aoi_record.id,
             'acquisition_dt': acquisition_dt,
             'cloud_cover': row['cloud_cover'],
             'geometry': geometry_str

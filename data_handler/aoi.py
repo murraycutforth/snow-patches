@@ -75,15 +75,18 @@ def get_aois() -> gpd.GeoDataFrame:
     Returns:
         A GeoDataFrame with the following columns:
             - name: Name of the area (str)
+            - center_lat: Latitude of the center point (float)
+            - center_lon: Longitude of the center point (float)
+            - size_km: Size of the bounding box in kilometers (float)
             - geometry: Polygon representing the bounding box
         The GeoDataFrame uses the WGS 84 coordinate system (EPSG:4326).
 
     Example:
         >>> aois = get_aois()
         >>> print(aois)
-                name                                           geometry
-        0  Ben Nevis  POLYGON ((-5.09374 56.75203, -5.09374 56.8418...
-        1  Ben Macdui  POLYGON ((-3.76920 57.02553, -3.76920 57.1152...
+                name  center_lat  center_lon  size_km                                           geometry
+        0  Ben Nevis     56.7969     -5.0036     10.0  POLYGON ((-5.09374 56.75203, -5.09374 56.8418...
+        1  Ben Macdui     57.0704     -3.6691     10.0  POLYGON ((-3.76920 57.02553, -3.76920 57.1152...
     """
     # Define the areas of interest with their center coordinates
     aoi_definitions: List[Tuple[str, float, float]] = [
@@ -97,6 +100,9 @@ def get_aois() -> gpd.GeoDataFrame:
         bbox = create_bbox_around_point(lat, lon, size_km=10.0)
         aoi_data.append({
             "name": name,
+            "center_lat": lat,
+            "center_lon": lon,
+            "size_km": 10.0,
             "geometry": bbox
         })
 

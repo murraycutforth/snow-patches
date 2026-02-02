@@ -3,7 +3,12 @@
     "allow": [
       "Bash(pytest:*)",
       "Bash(tree:*)",
-      "Bash(COPERNICUS_USERNAME=\"murray.cutforth@gmail.com\" COPERNICUS_PASSWORD='f!\"nr,;]J7ZZ!@' pytest:*)"
+      "Bash(COPERNICUS_USERNAME=\"murray.cutforth@gmail.com\" COPERNICUS_PASSWORD='f!\"nr,;]J7ZZ!@' pytest:*)",
+      "Bash(wc:*)",
+      "Bash(git add:*)",
+      "Bash(python test_notebook.py:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(jupyter nbconvert:*)"
     ]
   }
 }

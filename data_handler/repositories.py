@@ -64,6 +64,17 @@ class AOIRepository:
         """
         return self.session.query(AOI).filter(AOI.name == name).first()
 
+    def get_by_id(self, id: int) -> Optional[AOI]:
+        """Retrieve AOI by database ID.
+
+        Args:
+            id: Database primary key ID
+
+        Returns:
+            AOI instance if found, None otherwise
+        """
+        return self.session.query(AOI).filter(AOI.id == id).first()
+
     def get_all(self) -> List[AOI]:
         """Retrieve all AOI records.
 
@@ -202,6 +213,14 @@ class SentinelProductRepository:
             query = query.filter(SentinelProduct.cloud_cover <= max_cloud_cover)
 
         return query.order_by(SentinelProduct.acquisition_dt).all()
+
+    def get_all(self) -> List[SentinelProduct]:
+        """Retrieve all Sentinel product records.
+
+        Returns:
+            List of all SentinelProduct instances
+        """
+        return self.session.query(SentinelProduct).all()
 
     def bulk_create_if_not_exists(
         self,

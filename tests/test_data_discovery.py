@@ -284,3 +284,30 @@ class TestSentinelHubProductDiscovery:
         # Assert: Search was called with correct collection
         call_kwargs = mock_catalog_instance.search.call_args[1]
         assert call_kwargs['collection'] == DataCollection.SENTINEL2_L2A
+
+    @patch('data_handler.discovery.SentinelHubCatalog')
+    def test_find_sentinel_products_accepts_bbox_parameter(
+        self, mock_catalog_class, mock_config, sample_aoi, mock_catalog_results
+    ):
+        """Test that function accepts 'bbox' as an alias for 'aoi_geometry'.
+
+        This test reproduces the error from the notebook where bbox is used
+        instead of aoi_geometry. The function should accept both parameter names.
+        """
+        # Arrange
+        mock_catalog_instance = MagicMock()
+        mock_catalog_class.return_value = mock_catalog_instance
+        mock_catalog_instance.search.return_value = iter(mock_catalog_results)
+
+        # Act: Call with 'bbox' parameter (as used in notebook)
+        result_df = find_sentinel_products(
+            config=mock_config,
+            bbox=sample_aoi,  # Using 'bbox' instead of 'aoi_geometry'
+            start_date=datetime(2024, 1, 1),
+            end_date=datetime(2024, 1, 31),
+            max_cloud_cover=20.0
+        )
+
+        # Assert: Should work without error
+        assert isinstance(result_df, pd.DataFrame)
+        assert len(result_df) == 2  # Two products with cloud cover <= 20%

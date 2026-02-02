@@ -716,3 +716,27 @@ class TestDownloadPendingProducts:
         # Verify only 2 were processed
         assert mock_download.call_count == 2
         assert results['success'] <= 2
+
+    @patch('data_handler.download.download_product')
+    def test_accepts_max_retries_parameter(self, mock_download, db_session, sample_product_in_db, mock_config):
+        """Test that function accepts max_retries parameter.
+
+        This reproduces the notebook usage pattern where max_retries is specified.
+        """
+        product, status, aoi = sample_product_in_db
+
+        # Mock download_product to succeed
+        mock_download.return_value = (True, None, Path('/fake/path.tif'))
+
+        # Execute with max_retries parameter (as used in notebook)
+        results = download_pending_products(
+            session=db_session,
+            config=mock_config,
+            limit=5,
+            max_retries=2
+        )
+
+        # Should complete without error
+        assert 'success' in results
+        assert 'failed' in results
+        assert 'skipped' in results

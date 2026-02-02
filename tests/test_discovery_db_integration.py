@@ -221,3 +221,55 @@ class TestSaveProductsToDb:
 
         assert created == 0
         assert skipped == 0
+
+    def test_save_products_accepts_aoi_id_as_keyword(
+        self, db_session, sample_geodataframe, sample_products_df
+    ):
+        """Test that save_products_to_db accepts aoi_id as keyword argument."""
+        # Seed AOIs
+        seed_aois_from_geodataframe(db_session, sample_geodataframe)
+
+        # Get the AOI ID
+        aoi_repo = AOIRepository(db_session)
+        ben_nevis_aoi = aoi_repo.get_by_name('Ben Nevis')
+
+        # Save products using aoi_id keyword argument
+        created, skipped = save_products_to_db(
+            db_session, sample_products_df, aoi_id=ben_nevis_aoi.id
+        )
+
+        assert created == 2
+        assert skipped == 0
+
+        # Verify products were saved with correct AOI
+        product_repo = SentinelProductRepository(db_session)
+        products = product_repo.get_by_aoi(ben_nevis_aoi.id)
+        assert len(products) == 2
+
+    def test_save_products_accepts_aoi_id_as_positional(
+        self, db_session, sample_geodataframe, sample_products_df
+    ):
+        """Test that save_products_to_db accepts aoi_id as positional argument.
+
+        This reproduces the exact notebook usage pattern:
+        save_products_to_db(session, products_df, aoi_db.id)
+        """
+        # Seed AOIs
+        seed_aois_from_geodataframe(db_session, sample_geodataframe)
+
+        # Get the AOI
+        aoi_repo = AOIRepository(db_session)
+        ben_nevis_aoi = aoi_repo.get_by_name('Ben Nevis')
+
+        # Save products using integer ID as positional argument (as in notebook)
+        created, skipped = save_products_to_db(
+            db_session, sample_products_df, ben_nevis_aoi.id
+        )
+
+        assert created == 2
+        assert skipped == 0
+
+        # Verify products were saved with correct AOI
+        product_repo = SentinelProductRepository(db_session)
+        products = product_repo.get_by_aoi(ben_nevis_aoi.id)
+        assert len(products) == 2
